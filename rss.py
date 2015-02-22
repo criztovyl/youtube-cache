@@ -15,10 +15,11 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import feedparser
-from appdirs import user_data_dir
 import hashlib
 import os
 import json as JSON
+from tools import JSONFile
+from appdirs import user_data_dir
 class RSSParser:
     def __init__(self, url):
 
@@ -28,28 +29,17 @@ class RSSParser:
         self.urls = []
 
         #Set data path and safe name
-        appdir = user_data_dir("rssparser", "criztovyl")
-        self.safe_name = appdir + os.sep + hashlib.sha256(self.url).hexdigest()
-
-        #Create data dir
-        if not os.path.exists(appdir):
-            os.makedirs(appdir)
-
-        #Open safe file (once for writing that the file is created if not exists)
-        if not os.path.exists(self.safe_name + ".json"):
-            f = open(self.safe_name + ".json", "w")
-            f.close()
-        safe_file = open(self.safe_name + ".json", "r")
+        appdirPath = Path(user_data_dir("rssparser", "criztovyl"))
+        appdirPath.mkdirs()
+        self.safePath = appdirPath.append(hashlib.sha256(self.url).hexdigest())
+        self.safe = JSONFile(safePath.path)
 
         #Write mapping file only if not exists
-        mab_path = self.safe_name + ".map"
-        if not os.path.exists(mab_path):
-            with open(mab_path, "w") as mab:
-                mab.write(self.url)
+        self.safePath.suffix("map").touchIfNotExists()
 
         #Load urls and items from json
         try:
-            json = JSON.load(safe_file)
+            json = safe.load()
             if "urls" in json.keys():
                 self.urls = JSON.loads(json["urls"])
             if "items" in json.keys():
@@ -57,20 +47,26 @@ class RSSParser:
         except ValueError, e:
             pass
 
-        safe_file.close()
-
-
     #Update feed
     def update(self):
         #Load Feed
         feed = feedparser.parse(self.url);
         #Iterate items
+        newitems = []
         for item in feed["items"]:
             if item["id"] not in self.items:
                 self.items.append(item["id"])
-                self.urls.append(item["link"].replace("&feature=youtube_gdata", ""))
+                link = item["link"].replace("&feature=youtube_gdata", "")
+                self.urls.append(link)
+                newitems.append(link)
+        self.save()
+        return newitems;
+
+    def save(self):
         #Dump updated urls and items
-        JSON.dump({
+        self.safe.data({
                 "urls" : JSON.dumps(self.urls),
                 "items" : JSON.dumps(self.items)
-                }, open(self.safe_name + ".json", "w"))
+                }).save()
+    def saveAsync(self):
+        Thread(target=self.save).start()

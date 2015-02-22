@@ -1,3 +1,4 @@
+#!/usr/bin/python
 #    This is a program to cache YouTube videos
 #    Copyright (C) 2015 Christoph "criztovyl" Schulz
 #
@@ -13,9 +14,36 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from rssparser import RSSParser
-rss = RSSParser("http://gdata.youtube.com/feeds/base/users/songstowearpantsto/uploads?format=5")
-rss.update()
-while len(rss.urls) > 0:
-    print rss.urls.pop()
-rss.update()
+from rss import RSSParser
+from tools import Path
+from tools import JSONFile
+from appdirs import AppDirs
+class YouTubeCache:
+    def __init__(self):
+        #Init vars
+        self.appdir = Path(AppDirs("YouTubeCache", "criztovyl").user_data_dir)
+        self.channels_jf = JSONFile(self.appdir.append("channels.json").path)
+        self.cached_jf = JSONFile(self.appdir.append("chached.json").path)
+        self.rsss = []
+        self.cached = self.cached_jf.load() or []
+        self.channels = self.channels_jf.load() or []
+        for channel in self.channels:
+            self.rsss.append(RSSParser())
+        for rss in self.rsss:
+            print rss.url
+        self.save()
+    def cache(self):
+        for rss in self.rsss:
+            rss.update()
+        return self
+    def add(self, channels):
+        for channel in channels:
+            self.channels.append(channel)
+            self.rsss.append(RSSParser(self.rssurl(channel)))
+        return self
+    def save(self):
+        self.channels_jf.data(self.channels).saveAsync()
+        self.cached_jf.data(self.cached).saveAsync()
+    @staticmethod
+    def rssurl(channel):
+        return 'http://gdata.youtube.com/feeds/base/users/%(c)s/uploads?format=5' % {"c" : channel }
